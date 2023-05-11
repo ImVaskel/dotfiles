@@ -1,0 +1,18 @@
+[user]
+	name = ImVaskel
+	email = 49348256+ImVaskel@users.noreply.github.com
+[core]
+	autocrlf = false
+        ignorecase = true
+[color]
+	ui = auto
+[init]
+        defaultbranch = main
+[help]
+	autocorrect = 20
+[push]
+	default = current
+[pull]
+	ff = true
+[include]
+	path = .gitconfig.local
