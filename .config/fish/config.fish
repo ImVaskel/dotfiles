@@ -2,33 +2,17 @@ set fish_greeting
 
 set -x EDITOR /usr/bin/nano
 
-
-
-
-
+# Global, then local
 if status is-interactive
     # Starship
     starship init fish | source
-
-    if command -sq kitty
-        alias ssh="kitty +kitten ssh"
-    end
-
     # SSH Stuff
-    if command -sq gnome-keyring-daemon
-        set -x (gnome-keyring-daemon | string split "=")
-        set -x SSH_ASKPASS /usr/lib/seahorse/ssh-askpass
-        set -x SSH_ASKPASS_REQUIRE force
-    else
-        set -x (ssh-agent | string split "=")
-    end
-
-    # In WSL
-    if uname -a | grep WSL2 >/dev/null
-        
-    end
+    set -x (ssh-agent | string split "=")
 end
-fish_add_path /home/austin/.spicetify
+
+set local_config ~/.config/fish/config.local.fish
+test -r $local_config; and source $local_config
+
 fish_add_path $HOME/.local/bin
 
 # pnpm
