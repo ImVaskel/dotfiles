@@ -149,7 +149,7 @@ format = "[ $duration]($style)"
 
 [time]
 disabled = false
-time_format = "%R"
+time_format = "%I:%M %P"
 style = "bg:#3e1a78 fg:#000000"
 format = '[ ♥ $time ]($style)'
 
