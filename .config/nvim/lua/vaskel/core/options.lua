@@ -29,7 +29,10 @@ opt.background = "dark"
 -- opt.backspace = "ident,eol,start"
 
 -- clipboard
-opt.clipboard:append("unnamedplus")
+if jit.os == "OSX" then
+    opt.clipboard:append("unnamedplus")
+    print("hi")
+end
 
 -- split windows
 opt.splitright = true
