@@ -13,7 +13,7 @@ local packer_bootstrap = ensure_packer() -- true if packer was just installed
 
 -- autocommand that reloads neovim and installs/updates/removes plugins
 -- when file is saved
-vim.cmd([[ 
+vim.cmd([[
   augroup packer_user_config
     autocmd!
     autocmd BufWritePost plugins-setup.lua source <afile> | PackerSync
@@ -29,8 +29,10 @@ return packer.startup(function(use)
 	use("wbthomason/packer.nvim")
 
 	use("nvim-lua/plenary.nvim")
+
 	-- colorscheme
 	use("ellisonleao/gruvbox.nvim")
+	use("sainnhe/gruvbox-material")
 
 	use("christoomey/vim-tmux-navigator")
 
@@ -75,7 +77,6 @@ return packer.startup(function(use)
 	use("neovim/nvim-lspconfig")
 	use("hrsh7th/cmp-nvim-lsp")
 	use({ "glepnir/lspsaga.nvim", branch = "main" })
-	use("jose-elias-alvarez/typescript.nvim")
 	use("onsails/lspkind.nvim")
 
 	-- auto closing

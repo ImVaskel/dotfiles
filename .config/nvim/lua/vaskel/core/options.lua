@@ -24,14 +24,13 @@ opt.cursorline = true
 opt.termguicolors = true
 opt.background = "dark"
 
-
 -- backspace
 -- opt.backspace = "ident,eol,start"
 
 -- clipboard
 if jit.os == "OSX" then
-    opt.clipboard:append("unnamedplus")
-    print("hi")
+	opt.clipboard:append("unnamedplus")
+	print("hi")
 end
 
 -- split windows
@@ -39,3 +38,6 @@ opt.splitright = true
 opt.splitbelow = true
 
 opt.iskeyword:append("-")
+
+-- Format Commmand
+vim.cmd.command("Format lua vim.lsp.buf.format()")
