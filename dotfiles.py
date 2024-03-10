@@ -1,21 +1,19 @@
 #!/usr/bin/env python3
 
 from __future__ import annotations
+
 import argparse
 import enum
 import logging
-from os import link, unlink
 import os
 import platform
 import re
-
 import typing
 from pathlib import Path
 
 
 # Taken from https://github.com/Rapptz/discord.py/blob/master/discord/utils.py with some minor modification.
 class ColorFormatter(logging.Formatter):
-
     LEVEL_COLOURS = [
         (logging.DEBUG, "\x1b[40;1m"),
         (logging.INFO, "\x1b[34;1m"),
@@ -214,7 +212,7 @@ def get_override_files() -> list[Path]:
         # Initialize our best pick.
         best, best_overrides = None, None
         for f, f_overrides in overrides:
-            if f_overrides.cond == Condition.default and best == None:
+            if f_overrides.cond == Condition.default and best is None:
                 best = f
                 best_overrides = f_overrides
                 continue
@@ -222,7 +220,7 @@ def get_override_files() -> list[Path]:
             condition = CONDITIONS_CALLABLE_MAP[f_overrides.cond](f_overrides.comp)
 
             if condition and (
-                best_overrides == None or f_overrides.cond > best_overrides.cond
+                best_overrides is None or f_overrides.cond > best_overrides.cond
             ):
                 best = f
                 best_overrides = f_overrides
