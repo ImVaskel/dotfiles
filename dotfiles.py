@@ -4,15 +4,68 @@ from __future__ import annotations
 import argparse
 import enum
 import logging
+from os import link, unlink
+import os
 import platform
 import re
 
 import typing
 from pathlib import Path
 
+
+# Taken from https://github.com/Rapptz/discord.py/blob/master/discord/utils.py with some minor modification.
+class ColorFormatter(logging.Formatter):
+
+    LEVEL_COLOURS = [
+        (logging.DEBUG, "\x1b[40;1m"),
+        (logging.INFO, "\x1b[34;1m"),
+        (logging.WARNING, "\x1b[33;1m"),
+        (logging.ERROR, "\x1b[31m"),
+        (logging.CRITICAL, "\x1b[41m"),
+    ]
+
+    FORMATS = {
+        level: logging.Formatter(
+            f"{colour}%(levelname)-8s\x1b[0m%(message)s",
+        )
+        for level, colour in LEVEL_COLOURS
+    }
+
+    def format(self, record):
+        formatter = self.FORMATS.get(record.levelno)
+        if formatter is None:
+            formatter = self.FORMATS[logging.DEBUG]
+
+        # Override the traceback to always print in red
+        if record.exc_info:
+            text = formatter.formatException(record.exc_info)
+            record.exc_text = f"\x1b[31m{text}\x1b[0m"
+
+        output = formatter.format(record)
+
+        # Remove the cache layer
+        record.exc_text = None
+        return output
+
+
+class Colors:
+    GREY = "\x1b[38;21m"
+    YELLOW = "\x1b[33;21m"
+    RED = "\x1b[31;21m"
+    BOLD_RED = "\x1b[31;1m"
+    BOLD_HIGH_BLACK = "\x1b[1;90m"
+    CYAN = "\x1b[1;96m"
+    GREEN = "\x1b[1;32m"
+    RESET = "\x1b[0m"
+
+
+def color(msg: str, color: str) -> str:
+    return color + msg + Colors.RESET
+
+
 logger = logging.Logger("dotfiles", level=logging.INFO)
 handler = logging.StreamHandler()
-handler.setFormatter(logging.Formatter("[{levelname:<8}]: {message}", style="{"))
+handler.setFormatter(ColorFormatter())
 logger.addHandler(handler)
 
 
@@ -48,7 +101,7 @@ CONDITIONS_CALLABLE_MAP: dict[Condition, typing.Callable[[str | None], bool]] = 
     Condition.os: os_condition,
 }
 
-DOTFILES = Path(__file__).absolute().parent
+DOTFILES = Path(__file__).resolve().parent
 HOME = Path.home()
 
 # A list of ignored file/directory names.
@@ -95,7 +148,6 @@ def parse_override_name(name: str) -> Override:
         Override:  A NamedTuple, with the first element being the condition (os, hostname, etc),
             the second being the parsed conditional to compare to, and the third being the parsed file name.
             If ``default`` is parsed out, element 2 will be ``None``.
-            ``name`` will always be present, regardless of whether an override match was found.
     """
     if match := DEFAULT_REGEX.match(name):
         return Override(Condition["default"], None, match.group("name"))
@@ -181,7 +233,11 @@ def get_override_files() -> list[Path]:
 
 def symlink_file(original: Path, to: Path):
     if to.exists(follow_symlinks=False) and to.resolve() != original:
-        logger.critical("attempted to symlink to path that existed and wasn't symlinked to us: %s.", to.name)
+        logger.critical(
+            "attempted to symlink to path that existed and wasn't symlinked to us: %s. (original: %s)",
+            to,
+            original,
+        )
         logger.critical("please move or delete the file and try again.")
         exit(1)
     elif not to.exists(follow_symlinks=False):
@@ -193,6 +249,7 @@ def symlink_file(original: Path, to: Path):
     else:
         logger.debug("file %s already existed, skipping.", to.name)
 
+
 def symlink_bin_and_self():
     for file in (DOTFILES / "bin").iterdir():
         real_path = HOME / ".local" / file.relative_to(DOTFILES)
@@ -201,7 +258,8 @@ def symlink_bin_and_self():
         symlink_file(file, real_path)
 
     # Symlink the self binary.
-    symlink_file(Path(__file__), HOME / ".local/bin/dotfiles")
+    symlink_file(Path(__file__).resolve(), HOME / ".local/bin/dotfiles")
+
 
 def cli_apply(action: typing.Literal["all", "overrides", "regular"], dry: bool):
     files = []
@@ -218,29 +276,145 @@ def cli_apply(action: typing.Literal["all", "overrides", "regular"], dry: bool):
 
     for file in files:
         real_path = get_relative_to_home(file)
-        logger.info("%s => %s", file.absolute(), real_path.absolute())
+        logger.info(
+            "%s %s %s",
+            color(str(file.absolute()), Colors.CYAN),
+            color("=>", Colors.BOLD_HIGH_BLACK),
+            color(str(real_path.absolute()), Colors.CYAN),
+        )
         if not dry:
             symlink_file(file, real_path)
 
     for file in override_files:
         overrides = parse_override_name(file.name)
         real_path = get_relative_overrides_to_home(file.parent / overrides.name)
-        logger.info("%s => %s", file.absolute(), real_path.absolute())
+        logger.info(
+            "%s %s %s",
+            color(str(file.absolute()), Colors.CYAN),
+            color("=>", Colors.BOLD_HIGH_BLACK),
+            color(str(real_path.absolute()), Colors.CYAN),
+        )
         if not dry:
             symlink_file(file, real_path)
+
+
+def cli_add(file: Path, dry: bool):
+    if not file.is_file() or file.is_symlink():
+        logger.error("The provided file is not a regular file.")
+        exit(1)
+    elif not file.is_relative_to(HOME):
+        if file.root:
+            logger.error(
+                "The provided file is not relative to home. At this time, only files in $HOME are supported."
+            )
+            exit(1)
+        file = Path.cwd() / file
+
+    path = DOTFILES / file.relative_to(HOME)
+    if not dry:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        file.rename(path)
+        file.symlink_to(path)
+    logger.info(
+        "File added to dotfiles, the path is: %s", color(str(path), Colors.CYAN)
+    )
+
+
+def cli_remove(file: Path, dry: bool):
+    if file.is_dir():
+        logger.error("The provided file is not a regular file or symlink.")
+        exit(1)
+    elif not file.root:
+        file = Path.cwd() / file
+    if file.is_relative_to(DOTFILES):
+        real_file = file
+        file = get_relative_to_home(file)
+
+    if file.is_symlink():
+        real_file = file.resolve()
+    else:
+        real_file = file
+
+    if not real_file.is_relative_to(DOTFILES):
+        logger.error(
+            "The file is not relative to the dotfiles directory after resolving. (is it added?)"
+        )
+        exit(1)
+
+    logger.debug("The real file is %s and the symlink is %s", str(real_file), str(file))
+
+    if not dry:
+        file.unlink()
+        real_file.unlink()
+    logger.info("File removed from dotfiles.")
+
+
+def cli_status():
+    linked: list[tuple[Path, Path]] = []
+    not_linked: list[tuple[Path, Path]] = []
+    for file in get_symlink_files():
+        real_path = get_relative_to_home(file)
+        if not real_path.exists():
+            not_linked.append((file, real_path))
+        else:
+            linked.append((file, real_path))
+
+    for file in get_override_files():
+        overrides = parse_override_name(file.name)
+        real_path = get_relative_overrides_to_home(file.parent / overrides.name)
+        if not real_path.exists(follow_symlinks=False):
+            not_linked.append((file, real_path))
+        else:
+            linked.append((file, real_path))
+
+    if linked:
+        logger.info("=" * (os.get_terminal_size().columns - 8))
+        logger.info("Managed: ")
+        for file, real_path in linked:
+            logger.info(
+                "%s %s %s",
+                color(str(file.absolute()), Colors.GREEN),
+                color("=>", Colors.BOLD_HIGH_BLACK),
+                color(str(real_path.absolute()), Colors.GREEN),
+            )
+    if not_linked:
+        print()
+        logger.info("=" * (os.get_terminal_size().columns - 8))
+        logger.info("Unmanaged: ")
+        for file, real_path in not_linked:
+            logger.info(
+                "%s %s %s",
+                color(str(file.absolute()), Colors.RED),
+                color("=>", Colors.BOLD_HIGH_BLACK),
+                color(str(real_path.absolute()), Colors.RED),
+            )
+
 
 def main():
     parser = argparse.ArgumentParser(prog="dotfiles", description="Dotfiles helper")
     subparsers = parser.add_subparsers(title="subcommands", required=True)
 
-    apply_parser = subparsers.add_parser(
+    subparsers.add_parser(
         "apply",
         help="Run the process to symlink the dotfiles",
-    )
-    apply_parser.add_argument("apply", choices=["all", "overrides", "regular"], help="The ")
+    ).add_argument("action", choices=["all", "overrides", "regular"])
+    subparsers.add_parser(
+        "add",
+        help="Adds a file to the dotfiles location. This moves the file and creates a symlink to where it was originally located.",
+    ).add_argument("add", type=Path, metavar="file")
+    subparsers.add_parser(
+        "remove",
+        help="Removes a file from the dotfiles location. This removes the file completely. Note that this does not currently function on files with overrides.",
+    ).add_argument("remove", type=Path, metavar="file")
+    subparsers.add_parser(
+        "status",
+        help="List all the dotfiles that are managed. Will also list the ones that are managed, but not yet applied.",
+    ).add_argument("status", action="store_true")
 
-    for _, subp in subparsers.choices.items():
-        # add dry-run to all subparsers so that it can be put anywhere in the program.
+    for name, subp in subparsers.choices.items():
+        if name in ["status"]:
+            continue
+        # add dry-run to all subparsers (that are valid to do so) so that it can be put anywhere in the program.
         subp.add_argument(
             "-d",
             "--dry-run",
@@ -253,16 +427,24 @@ def main():
             "--debug",
             action="store_true",
             help="Enables debug/verbose mode. This internally just sets the logger's mode to DEBUG.",
-            dest="debug"
+            dest="debug",
         )
 
     args = parser.parse_args()
 
-    if args.debug:
+    if hasattr(args, "debug"):
         logger.setLevel(logging.DEBUG)
 
-    if args.apply:
-        cli_apply(args.apply, args.dry_run)
+    logger.debug("running with args %s", args)
+
+    if hasattr(args, "action"):
+        cli_apply(args.action, args.dry_run)
+    elif hasattr(args, "add"):
+        cli_add(args.add, args.dry_run)
+    elif hasattr(args, "remove"):
+        cli_remove(args.remove, args.dry_run)
+    elif hasattr(args, "status"):
+        cli_status()
 
 
 if __name__ == "__main__":
