@@ -13,6 +13,11 @@ import textwrap
 import typing
 from pathlib import Path
 
+if typing.TYPE_CHECKING:
+    SubparserType: typing.TypeAlias = argparse._SubParsersAction[
+        argparse.ArgumentParser
+    ]
+
 
 # Taken from https://github.com/Rapptz/discord.py/blob/master/discord/utils.py with some minor modification.
 class ColorFormatter(logging.Formatter):
@@ -269,7 +274,13 @@ def symlink_bin_and_self():
     symlink_file(Path(__file__).resolve(), HOME / ".local/bin/dotfiles")
 
 
-def cli_apply(action: typing.Literal["all", "overrides", "regular"], dry: bool):
+def cli(parser: argparse.ArgumentParser, args: argparse.Namespace):
+    parser.print_help()
+
+
+def cli_apply(parser: argparse.ArgumentParser, args: argparse.Namespace):
+    action: str = args.action
+    dry: bool = args.dry
     files = []
     override_files = []
     if action == "all":
@@ -309,7 +320,9 @@ def cli_apply(action: typing.Literal["all", "overrides", "regular"], dry: bool):
         symlink_bin_and_self()
 
 
-def cli_add(file: Path, dry: bool):
+def cli_add(parser: argparse.ArgumentParser, args: argparse.Namespace):
+    file: Path = args.file
+    dry: bool = args.dry
     if not file.is_file() or file.is_symlink():
         logger.error("The provided file is not a regular file.")
         exit(1)
@@ -331,7 +344,9 @@ def cli_add(file: Path, dry: bool):
     )
 
 
-def cli_remove(file: Path, dry: bool):
+def cli_remove(parser: argparse.ArgumentParser, args: argparse.Namespace):
+    file: Path = args.file
+    dry: bool = args.dry
     if file.is_dir():
         logger.error("The provided file is not a regular file or symlink.")
         exit(1)
@@ -360,7 +375,7 @@ def cli_remove(file: Path, dry: bool):
     logger.info("File removed from dotfiles.")
 
 
-def cli_status():
+def cli_status(parser: argparse.ArgumentParser, args: argparse.Namespace):
     linked: list[tuple[Path, Path]] = []
     not_linked: list[tuple[Path, Path]] = []
     for file in get_symlink_files():
@@ -401,7 +416,8 @@ def cli_status():
             )
 
 
-def cli_test(expr: str):
+def cli_test(parser: argparse.ArgumentParser, args: argparse.Namespace):
+    expr: str = args.expression
     # first, check if the expression is even valid.
     # this doesn't need regex: expressions are just cond.comp, so split by ``.``
     split = expr.split(".")
@@ -429,17 +445,14 @@ def cli_test(expr: str):
         exit(1)
 
 
-def main():
-    parser = argparse.ArgumentParser(prog="dotfiles", description="Dotfiles helper")
-    subparsers = parser.add_subparsers(
-        title="subcommands", required=True, metavar="", dest="subcommand"
-    )
-
-    subparsers.add_parser(
+def add_apply_args(subparser: SubparserType):
+    parser = subparser.add_parser(
         "apply",
         help="Run the process to symlink the dotfiles",
         formatter_class=argparse.RawTextHelpFormatter,
-    ).add_argument(
+    )
+    parser.set_defaults(func=cli_apply)
+    parser.add_argument(
         "action",
         choices=["all", "overrides", "regular"],
         help=textwrap.dedent(
@@ -450,32 +463,85 @@ def main():
             """
         ),
     )
-    subparsers.add_parser(
+    parser.add_argument(
+        "-d",
+        "--dry",
+        "--dry-run",
+        action="store_true",
+        help="Preforms a dry run, only printing out what would change.",
+    )
+
+
+def add_add_args(subparser: SubparserType):
+    parser = subparser.add_parser(
         "add",
         help="Adds a file to the dotfiles location. This moves the file and creates a symlink to where it was originally located.",
-    ).add_argument("add", type=Path, metavar="file")
-    subparsers.add_parser(
+    )
+    parser.set_defaults(func=cli_add)
+    parser.add_argument("add", type=Path, metavar="file")
+    parser.add_argument(
+        "-d",
+        "--dry",
+        "--dry-run",
+        action="store_true",
+        help="Preforms a dry run, only printing out what would change.",
+        dest="dry",
+        default=False,
+    )
+
+
+def add_remove_args(subparser: SubparserType):
+    parser = subparser.add_parser(
         "remove",
         help="Removes a file from the dotfiles location. This removes the file completely. Note that this does not currently function on files with overrides.",
-    ).add_argument("remove", type=Path, metavar="file")
-    subparsers.add_parser(
+    )
+    parser.set_defaults(func=cli_remove)
+    parser.add_argument("remove", type=Path, metavar="file")
+    parser.add_argument(
+        "-d",
+        "--dry",
+        "--dry-run",
+        action="store_true",
+        help="Preforms a dry run, only printing out what would change.",
+    )
+
+
+def add_status_args(subparser: SubparserType):
+    parser = subparser.add_parser(
         "status",
         help="List all the dotfiles that are managed. Will also list the ones that are managed, but not yet applied.",
-    ).add_argument("status", action="store_true")
-    subparsers.add_parser(
+    )
+    parser.set_defaults(func=cli_status)
+    parser.add_argument("status", action="store_true")
+
+
+def add_test_args(subparser: SubparserType):
+    parser = subparser.add_parser(
         "test",
         help="Tests the given conditional expression to see if it would match for the current system.",
-    ).add_argument("expression")
+    )
+    parser.set_defaults(func=cli_test)
+    parser.add_argument("expression")
+    parser.add_argument(
+        "-d",
+        "--dry-run",
+        action="store_true",
+        help="Preforms a dry run, only printing out what would change.",
+    )
 
-    for name, subp in subparsers.choices.items():
-        # add dry-run to all subparsers (that are valid to do so) so that it can be put anywhere in the program.
-        if name not in ["status", "test"]:
-            subp.add_argument(
-                "-d",
-                "--dry-run",
-                action="store_true",
-                help="Preforms a dry run, only printing out what would change.",
-            )
+
+def main():
+    parser = argparse.ArgumentParser(prog="dotfiles", description="Dotfiles helper")
+    subparser = parser.add_subparsers(title="subcommands", metavar="")
+    parser.set_defaults(func=cli)
+
+    add_apply_args(subparser)
+    add_add_args(subparser)
+    add_remove_args(subparser)
+    add_status_args(subparser)
+    add_test_args(subparser)
+
+    for _, subp in subparser.choices.items():
         subp.add_argument(
             "-v",
             "--verbose",
@@ -488,21 +554,14 @@ def main():
 
     args = parser.parse_args()
 
-    if args.verbose:
+    # Not my favorite way to do this, but when invoking w/o subcommand we want to print help
+    # But we also don't take verbose because it won't do anything.
+    if getattr(args, "verbose", False):
         logger.setLevel(logging.DEBUG)
 
     logger.debug("running with args %s", args)
 
-    if args.subcommand == "action":
-        cli_apply(args.action, args.dry_run)
-    elif args.subcommand == "add":
-        cli_add(args.add, args.dry_run)
-    elif args.subcommand == "remove":
-        cli_remove(args.remove, args.dry_run)
-    elif args.subcommand == "status":
-        cli_status()
-    elif args.subcommand == "test":
-        cli_test(args.expression)
+    args.func(parser, args)
 
 
 if __name__ == "__main__":
