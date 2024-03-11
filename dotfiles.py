@@ -1,4 +1,5 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3.12
+# TODO: Change to support 3.9+ instead of 3.12+
 
 from __future__ import annotations
 
@@ -8,6 +9,7 @@ import logging
 import os
 import platform
 import re
+import textwrap
 import typing
 from pathlib import Path
 
@@ -52,13 +54,14 @@ class Colors:
     RED = "\x1b[31;21m"
     BOLD_RED = "\x1b[31;1m"
     BOLD_HIGH_BLACK = "\x1b[1;90m"
+    CYAN_BACKGROUND = "\x1b[46m"
     CYAN = "\x1b[1;96m"
     GREEN = "\x1b[1;32m"
     RESET = "\x1b[0m"
 
 
 def color(msg: str, color: str) -> str:
-    return color + msg + Colors.RESET
+    return f"{color}{msg}{Colors.RESET}"
 
 
 logger = logging.Logger("dotfiles", level=logging.INFO)
@@ -243,9 +246,16 @@ def symlink_file(original: Path, to: Path):
             to.parent.mkdir(parents=True)
 
         to.symlink_to(original)
-        logger.debug("successfully symlinked %s to %s.", to, original)
+        logger.info(
+            "successfully symlinked %s to %s.",
+            color(str(to), Colors.CYAN_BACKGROUND),
+            color(str(original), Colors.CYAN_BACKGROUND),
+        )
     else:
-        logger.debug("file %s already existed, skipping.", to.name)
+        logger.info(
+            "file %s already existed, skipping.",
+            color(str(to.relative_to(HOME)), Colors.CYAN_BACKGROUND),
+        )
 
 
 def symlink_bin_and_self():
@@ -265,35 +275,38 @@ def cli_apply(action: typing.Literal["all", "overrides", "regular"], dry: bool):
     if action == "all":
         files = get_symlink_files()
         override_files = get_override_files()
-        symlink_bin_and_self()
     elif action == "overrides":
         override_files = get_override_files()
     elif action == "regular":
         files = get_symlink_files()
-        symlink_bin_and_self()
 
     for file in files:
         real_path = get_relative_to_home(file)
-        logger.info(
-            "%s %s %s",
-            color(str(file.absolute()), Colors.CYAN),
-            color("=>", Colors.BOLD_HIGH_BLACK),
-            color(str(real_path.absolute()), Colors.CYAN),
-        )
         if not dry:
             symlink_file(file, real_path)
+        else:
+            logger.info(
+                "%s %s %s",
+                color(str(file.absolute()), Colors.CYAN_BACKGROUND),
+                color("=>", Colors.BOLD_HIGH_BLACK),
+                color(str(real_path.absolute()), Colors.CYAN_BACKGROUND),
+            )
 
     for file in override_files:
         overrides = parse_override_name(file.name)
         real_path = get_relative_overrides_to_home(file.parent / overrides.name)
-        logger.info(
-            "%s %s %s",
-            color(str(file.absolute()), Colors.CYAN),
-            color("=>", Colors.BOLD_HIGH_BLACK),
-            color(str(real_path.absolute()), Colors.CYAN),
-        )
         if not dry:
             symlink_file(file, real_path)
+        else:
+            logger.info(
+                "%s %s %s",
+                color(str(file.absolute()), Colors.CYAN),
+                color("=>", Colors.BOLD_HIGH_BLACK),
+                color(str(real_path.absolute()), Colors.CYAN),
+            )
+
+    if action in ["all", "regular"] and not dry:
+        symlink_bin_and_self()
 
 
 def cli_add(file: Path, dry: bool):
@@ -388,14 +401,55 @@ def cli_status():
             )
 
 
+def cli_test(expr: str):
+    # first, check if the expression is even valid.
+    # this doesn't need regex: expressions are just cond.comp, so split by ``.``
+    split = expr.split(".")
+    if len(split) == 2:
+        condition_str, comparison = split
+        if condition_str not in Condition.__members__.keys():
+            logger.error(
+                "the given condition was not valid, the valid keys are: %s",
+                ", ".join(Condition.__members__.keys()),
+            )
+            exit(1)
+        if Condition[condition_str] == Condition.default:
+            logger.error(
+                "the condition ``debug`` was provided, but debug takes no comparison."
+            )
+            exit(1)
+
+        logger.debug("output of platform.uname: %s", platform.uname())
+        logger.info(
+            "the evalutation of the given condition is: %s",
+            CONDITIONS_CALLABLE_MAP[Condition[condition_str]](comparison),
+        )
+    else:
+        logger.error("the given expression was invalid.")
+        exit(1)
+
+
 def main():
     parser = argparse.ArgumentParser(prog="dotfiles", description="Dotfiles helper")
-    subparsers = parser.add_subparsers(title="subcommands", required=True)
+    subparsers = parser.add_subparsers(
+        title="subcommands", required=True, metavar="", dest="subcommand"
+    )
 
     subparsers.add_parser(
         "apply",
         help="Run the process to symlink the dotfiles",
-    ).add_argument("action", choices=["all", "overrides", "regular"])
+        formatter_class=argparse.RawTextHelpFormatter,
+    ).add_argument(
+        "action",
+        choices=["all", "overrides", "regular"],
+        help=textwrap.dedent(
+            """
+            all - Applies all of the dotfiles (overrides and regular).
+            overrides - Applies just the overrides.
+            regular - Applies just the "regular" ones (anything not in overrides/)
+            """
+        ),
+    )
     subparsers.add_parser(
         "add",
         help="Adds a file to the dotfiles location. This moves the file and creates a symlink to where it was originally located.",
@@ -408,41 +462,47 @@ def main():
         "status",
         help="List all the dotfiles that are managed. Will also list the ones that are managed, but not yet applied.",
     ).add_argument("status", action="store_true")
+    subparsers.add_parser(
+        "test",
+        help="Tests the given conditional expression to see if it would match for the current system.",
+    ).add_argument("expression")
 
     for name, subp in subparsers.choices.items():
-        if name in ["status"]:
-            continue
         # add dry-run to all subparsers (that are valid to do so) so that it can be put anywhere in the program.
-        subp.add_argument(
-            "-d",
-            "--dry-run",
-            action="store_true",
-            help="Preforms a dry run, only printing out what would change.",
-        )
+        if name not in ["status", "test"]:
+            subp.add_argument(
+                "-d",
+                "--dry-run",
+                action="store_true",
+                help="Preforms a dry run, only printing out what would change.",
+            )
         subp.add_argument(
             "-v",
             "--verbose",
             "--debug",
             action="store_true",
             help="Enables debug/verbose mode. This internally just sets the logger's mode to DEBUG.",
-            dest="debug",
+            dest="verbose",
+            default=False,
         )
 
     args = parser.parse_args()
 
-    if hasattr(args, "debug"):
+    if args.verbose:
         logger.setLevel(logging.DEBUG)
 
     logger.debug("running with args %s", args)
 
-    if hasattr(args, "action"):
+    if args.subcommand == "action":
         cli_apply(args.action, args.dry_run)
-    elif hasattr(args, "add"):
+    elif args.subcommand == "add":
         cli_add(args.add, args.dry_run)
-    elif hasattr(args, "remove"):
+    elif args.subcommand == "remove":
         cli_remove(args.remove, args.dry_run)
-    elif hasattr(args, "status"):
+    elif args.subcommand == "status":
         cli_status()
+    elif args.subcommand == "test":
+        cli_test(args.expression)
 
 
 if __name__ == "__main__":

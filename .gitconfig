@@ -3,11 +3,11 @@
 	email = 49348256+ImVaskel@users.noreply.github.com
 [core]
 	autocrlf = false
-        ignorecase = true
+	ignorecase = true
 [color]
 	ui = auto
 [init]
-        defaultbranch = main
+	defaultbranch = main
 [help]
 	autocorrect = 20
 [push]

@@ -1,5 +1,10 @@
 eval "$(/opt/homebrew/bin/brew shellenv)"
 fish_add_path $HOME/.cargo/bin
-fish_add_path /Users/austin/.ghcup/bin
-source "/nix/var/nix/profiles/default/etc/profile.d/nix.fish"
-fish_add_path $HOME/.nix-profile/bin
+set -x JAVA_HOME $(/usr/libexec/java_home -v 17)
+fish_add_path $HOME/Developer/flutter/flutter/bin
+fish_add_path $HOME/.pub-cache/bin
+
+function fish_greeting
+    krabby random -i
+end
+set -gx SSH_AUTH_SOCK $HOME/.1password/agent.sock
