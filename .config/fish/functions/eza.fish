@@ -8,10 +8,10 @@ if status is-interactive
             eza -a $argv
         end
         function ll --wraps eza
-            eza -l $argv
+            eza --git -lg --icons $argv
         end
         function lla --wraps eza
-            eza -la $argv
+            eza --git -lag --icons $argv
         end
     end
 end
