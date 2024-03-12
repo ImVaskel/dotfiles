@@ -123,7 +123,7 @@ IGNORED_NAMES = [
     "gitignore",
     "README.md",
     ".venv",
-    "venv"
+    "venv",
 ]
 IGNORED_PATHS = [DOTFILES / Path(p) for p in IGNORED_NAMES]
 
@@ -235,7 +235,8 @@ def get_override_files() -> list[Path]:
             ):
                 best = f
                 best_overrides = f_overrides
-        symlinks.append(best)
+        if best:
+            symlinks.append(best)
 
     return symlinks
 

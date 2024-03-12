@@ -30,7 +30,6 @@ opt.background = "dark"
 -- clipboard
 if jit.os == "OSX" then
 	opt.clipboard:append("unnamedplus")
-	print("hi")
 end
 
 -- split windows
