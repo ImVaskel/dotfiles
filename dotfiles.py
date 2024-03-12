@@ -122,6 +122,8 @@ IGNORED_NAMES = [
     ".gitignore",
     "gitignore",
     "README.md",
+    ".venv",
+    "venv"
 ]
 IGNORED_PATHS = [DOTFILES / Path(p) for p in IGNORED_NAMES]
 
@@ -238,15 +240,19 @@ def get_override_files() -> list[Path]:
     return symlinks
 
 
-def symlink_file(original: Path, to: Path):
+def symlink_file(original: Path, to: Path, *, ignore: bool = False):
     if to.exists(follow_symlinks=False) and to.resolve() != original:
-        logger.critical(
+        # set the level based off of if we are ignoring or not.
+        level = logging.WARN if ignore else logging.CRITICAL
+        logger.log(
+            level,
             "attempted to symlink to path that existed and wasn't symlinked to us: %s. (original: %s)",
             to,
             original,
         )
-        logger.critical("please move or delete the file and try again.")
-        exit(1)
+        logger.log(level, "please move or delete the file and try again.")
+        if not ignore:
+            exit(1)
     elif not to.exists(follow_symlinks=False):
         if not to.parent.exists():
             to.parent.mkdir(parents=True)
@@ -264,18 +270,18 @@ def symlink_file(original: Path, to: Path):
         )
 
 
-def symlink_bin_and_self():
+def symlink_bin_and_self(ignore: bool = False):
     for file in (DOTFILES / "bin").iterdir():
         real_path = HOME / ".local" / file.relative_to(DOTFILES)
         if not real_path.parent.exists():
             real_path.parent.mkdir(parents=True)
-        symlink_file(file, real_path)
+        symlink_file(file, real_path, ignore=ignore)
 
     # Symlink the self binary.
     gitignore = DOTFILES / "gitignore"
     if gitignore.exists():
-        symlink_file(gitignore, HOME / ".gitignore")
-    symlink_file(Path(__file__).resolve(), HOME / ".local/bin/dotfiles")
+        symlink_file(gitignore, HOME / ".gitignore", ignore=ignore)
+    symlink_file(Path(__file__).resolve(), HOME / ".local/bin/dotfiles", ignore=ignore)
 
 
 def cli(parser: argparse.ArgumentParser, args: argparse.Namespace):
@@ -285,6 +291,7 @@ def cli(parser: argparse.ArgumentParser, args: argparse.Namespace):
 def cli_apply(parser: argparse.ArgumentParser, args: argparse.Namespace):
     action: str = args.action
     dry: bool = args.dry
+    ignore: bool = args.ignore
     files = []
     override_files = []
     if action == "all":
@@ -298,7 +305,7 @@ def cli_apply(parser: argparse.ArgumentParser, args: argparse.Namespace):
     for file in files:
         real_path = get_relative_to_home(file)
         if not dry:
-            symlink_file(file, real_path)
+            symlink_file(file, real_path, ignore=ignore)
         else:
             logger.info(
                 "%s %s %s",
@@ -311,7 +318,7 @@ def cli_apply(parser: argparse.ArgumentParser, args: argparse.Namespace):
         overrides = parse_override_name(file.name)
         real_path = get_relative_overrides_to_home(file.parent / overrides.name)
         if not dry:
-            symlink_file(file, real_path)
+            symlink_file(file, real_path, ignore=ignore)
         else:
             logger.info(
                 "%s %s %s",
@@ -321,7 +328,7 @@ def cli_apply(parser: argparse.ArgumentParser, args: argparse.Namespace):
             )
 
     if action in ["all", "regular"] and not dry:
-        symlink_bin_and_self()
+        symlink_bin_and_self(ignore=ignore)
 
 
 def cli_add(parser: argparse.ArgumentParser, args: argparse.Namespace):
@@ -460,6 +467,15 @@ def add_apply_args(subparser: SubparserType):
         formatter_class=argparse.RawTextHelpFormatter,
     )
     parser.set_defaults(func=cli_apply)
+    parser.add_argument(
+        "-i",
+        "--ignore",
+        "--ignore-errors",
+        action="store_true",
+        help="Ignores errors when linking files and instead skips that file, printing an error.",
+        dest="ignore",
+        default=False,
+    )
     parser.add_argument(
         "action",
         choices=["all", "overrides", "regular"],
