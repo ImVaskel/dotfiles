@@ -1,4 +1,4 @@
-if status is-interactive
+#if status is-interactive
     # Only apply eza if we are in an interactive environment and it exists.
     if command -q eza
         function ls --wraps eza
@@ -14,4 +14,4 @@ if status is-interactive
             eza --git -lag --icons $argv
         end
     end
-end
+#end

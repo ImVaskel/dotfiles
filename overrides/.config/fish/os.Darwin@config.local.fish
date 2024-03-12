@@ -1,7 +1,5 @@
-eval "$(/opt/homebrew/bin/brew shellenv)"
 fish_add_path $HOME/.cargo/bin
 set -x JAVA_HOME $(/usr/libexec/java_home -v 17)
-fish_add_path $HOME/Developer/flutter/flutter/bin
 fish_add_path $HOME/.pub-cache/bin
 
 function fish_greeting
