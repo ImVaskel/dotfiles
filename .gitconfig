@@ -4,6 +4,7 @@
 [core]
 	autocrlf = false
 	ignorecase = true
+	excludesFile = ~/.gitignore
 [color]
 	ui = auto
 [init]

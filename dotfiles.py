@@ -65,7 +65,7 @@ class Colors:
     RESET = "\x1b[0m"
 
 
-def color(msg: str, color: str) -> str:
+def color(msg: typing.Any, color: str) -> str:
     return f"{color}{msg}{Colors.RESET}"
 
 
@@ -120,6 +120,7 @@ IGNORED_NAMES = [
     "dotfiles.py",
     "__pycache__",
     ".gitignore",
+    "gitignore",
     "README.md",
 ]
 IGNORED_PATHS = [DOTFILES / Path(p) for p in IGNORED_NAMES]
@@ -271,6 +272,9 @@ def symlink_bin_and_self():
         symlink_file(file, real_path)
 
     # Symlink the self binary.
+    gitignore = DOTFILES / "gitignore"
+    if gitignore.exists():
+        symlink_file(gitignore, HOME / ".gitignore")
     symlink_file(Path(__file__).resolve(), HOME / ".local/bin/dotfiles")
 
 
@@ -321,7 +325,7 @@ def cli_apply(parser: argparse.ArgumentParser, args: argparse.Namespace):
 
 
 def cli_add(parser: argparse.ArgumentParser, args: argparse.Namespace):
-    file: Path = args.file
+    file: Path = args.add
     dry: bool = args.dry
     if not file.is_file() or file.is_symlink():
         logger.error("The provided file is not a regular file.")
@@ -345,7 +349,7 @@ def cli_add(parser: argparse.ArgumentParser, args: argparse.Namespace):
 
 
 def cli_remove(parser: argparse.ArgumentParser, args: argparse.Namespace):
-    file: Path = args.file
+    file: Path = args.remove
     dry: bool = args.dry
     if file.is_dir():
         logger.error("The provided file is not a regular file or symlink.")
@@ -417,32 +421,36 @@ def cli_status(parser: argparse.ArgumentParser, args: argparse.Namespace):
 
 
 def cli_test(parser: argparse.ArgumentParser, args: argparse.Namespace):
-    expr: str = args.expression
+    expressions: list[str] = args.expression
     # first, check if the expression is even valid.
     # this doesn't need regex: expressions are just cond.comp, so split by ``.``
-    split = expr.split(".")
-    if len(split) == 2:
-        condition_str, comparison = split
-        if condition_str not in Condition.__members__.keys():
-            logger.error(
-                "the given condition was not valid, the valid keys are: %s",
-                ", ".join(Condition.__members__.keys()),
-            )
-            exit(1)
-        if Condition[condition_str] == Condition.default:
-            logger.error(
-                "the condition ``debug`` was provided, but debug takes no comparison."
-            )
-            exit(1)
-
-        logger.debug("output of platform.uname: %s", platform.uname())
-        logger.info(
-            "the evalutation of the given condition is: %s",
-            CONDITIONS_CALLABLE_MAP[Condition[condition_str]](comparison),
-        )
-    else:
-        logger.error("the given expression was invalid.")
-        exit(1)
+    for expr in expressions:
+        split = expr.split(".")
+        if len(split) == 2:
+            condition_str, comparison = split
+            if condition_str not in Condition.__members__.keys():
+                logger.error(
+                    "the given condition %s was not valid, the valid keys are: %s",
+                    condition_str,
+                    ", ".join(Condition.__members__.keys()),
+                )
+            else:
+                logger.info(
+                    "is %s? %s",
+                    expr,
+                    color(
+                        CONDITIONS_CALLABLE_MAP[Condition[condition_str]](comparison),
+                        Colors.CYAN_BACKGROUND,
+                    ),
+                )
+        else:
+            if expr == "default":
+                logger.error(
+                    "the condition %s was provided, but default takes no comparison.",
+                    color("default", Colors.CYAN_BACKGROUND),
+                )
+            else:
+                logger.error("the given expression %s was invalid.", expr)
 
 
 def add_apply_args(subparser: SubparserType):
@@ -457,11 +465,13 @@ def add_apply_args(subparser: SubparserType):
         choices=["all", "overrides", "regular"],
         help=textwrap.dedent(
             """
-            all - Applies all of the dotfiles (overrides and regular).
+            all - Applies all of the dotfiles (overrides and regular). [DEFAULT]
             overrides - Applies just the overrides.
             regular - Applies just the "regular" ones (anything not in overrides/)
             """
         ),
+        nargs="?",
+        default="all",
     )
     parser.add_argument(
         "-d",
@@ -493,6 +503,7 @@ def add_add_args(subparser: SubparserType):
 def add_remove_args(subparser: SubparserType):
     parser = subparser.add_parser(
         "remove",
+        aliases=["rm"],
         help="Removes a file from the dotfiles location. This removes the file completely. Note that this does not currently function on files with overrides.",
     )
     parser.set_defaults(func=cli_remove)
@@ -518,10 +529,10 @@ def add_status_args(subparser: SubparserType):
 def add_test_args(subparser: SubparserType):
     parser = subparser.add_parser(
         "test",
-        help="Tests the given conditional expression to see if it would match for the current system.",
+        help="Tests the given conditional expressions to see if it would match for the current system.",
     )
     parser.set_defaults(func=cli_test)
-    parser.add_argument("expression")
+    parser.add_argument("expression", nargs="+", metavar="expressions...")
     parser.add_argument(
         "-d",
         "--dry-run",
@@ -530,7 +541,7 @@ def add_test_args(subparser: SubparserType):
     )
 
 
-def main():
+def setup_parser():
     parser = argparse.ArgumentParser(prog="dotfiles", description="Dotfiles helper")
     subparser = parser.add_subparsers(title="subcommands", metavar="")
     parser.set_defaults(func=cli)
@@ -541,16 +552,22 @@ def main():
     add_status_args(subparser)
     add_test_args(subparser)
 
-    for _, subp in subparser.choices.items():
-        subp.add_argument(
-            "-v",
-            "--verbose",
-            "--debug",
-            action="store_true",
-            help="Enables debug/verbose mode. This internally just sets the logger's mode to DEBUG.",
-            dest="verbose",
-            default=False,
-        )
+    for name, subp in subparser.choices.items():
+        if not any(a.dest == "verbose" for a in subp._actions):
+            subp.add_argument(
+                "-v",
+                "--verbose",
+                "--debug",
+                action="store_true",
+                help="Enables debug/verbose mode. This internally just sets the logger's mode to DEBUG.",
+                dest="verbose",
+            )
+
+    return parser
+
+
+def main():
+    parser = setup_parser()
 
     args = parser.parse_args()
 
