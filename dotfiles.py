@@ -105,6 +105,7 @@ CONDITIONS_CALLABLE_MAP: dict[Condition, typing.Callable[[str | None], bool]] = 
     Condition.hostname: hostname_condition,
     Condition.host: hostname_condition,
     Condition.os: os_condition,
+    Condition.default: lambda _: True,
 }
 
 DOTFILES = Path(__file__).resolve().parent
@@ -118,12 +119,13 @@ IGNORED_NAMES = [
     "overrides",
     "bin",
     "dotfiles.py",
-    "__pycache__",
     ".gitignore",
     "README.md",
     ".venv",
     "venv",
 ]
+with open(".gitignore") as fp:
+    IGNORED_NAMES += fp.readlines()
 IGNORED_PATHS = [DOTFILES / Path(p) for p in IGNORED_NAMES]
 
 # This regex matches foo.bar@baz, where ``foo`` is a condition, ``bar`` is a comparison for that condition,
@@ -288,7 +290,9 @@ def symlink_bin_and_self(overwrite: str = "a"):
         symlink_file(file, real_path, overwrite=overwrite)
 
     # Symlink the self binary.
-    symlink_file(Path(__file__).resolve(), HOME / ".local/bin/dotfiles", overwrite=overwrite)
+    symlink_file(
+        Path(__file__).resolve(), HOME / ".local/bin/dotfiles", overwrite=overwrite
+    )
 
 
 def cli(parser: argparse.ArgumentParser, args: argparse.Namespace):
@@ -478,7 +482,7 @@ def add_apply_args(subparser: SubparserType):
         choices=["y", "yes", "n", "no", "a", "ask"],
         dest="overwrite",
         help="Whether to overwrite a file if it is already present and not managed by the script. The default is (a)sk.",
-        default="a"
+        default="a",
     )
     parser.add_argument(
         "action",
