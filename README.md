@@ -10,7 +10,7 @@ Everything is managed by ``dotfiles.py``. It does the following:
     3. Then, it symlinks itself to ``~/.local/bin`` so that you may call it from anywhere to relink new dotfiles.
 
 It enters any folders in the root and then symlinks the files inside, rather than the folder themselves.
-.gitignore is also a special cased file. If it needs to be linked, make a file called ``.gitignore_global``
+.gitignore in the root directory is ignored, put your global gitignore in ``$XDG_CONFIG_HOME/git/ignore``.
 
 However, ``bin/`` is a special folder, which the files are symlinked to ``.local/bin`` (you should put this on your path.)
 

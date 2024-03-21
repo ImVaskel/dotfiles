@@ -120,7 +120,6 @@ IGNORED_NAMES = [
     "dotfiles.py",
     "__pycache__",
     ".gitignore",
-    "gitignore",
     "README.md",
     ".venv",
     "venv",
@@ -289,9 +288,6 @@ def symlink_bin_and_self(overwrite: str = "a"):
         symlink_file(file, real_path, overwrite=overwrite)
 
     # Symlink the self binary.
-    gitignore = DOTFILES / "gitignore"
-    if gitignore.exists():
-        symlink_file(gitignore, HOME / ".gitignore", overwrite=overwrite)
     symlink_file(Path(__file__).resolve(), HOME / ".local/bin/dotfiles", overwrite=overwrite)
 
 

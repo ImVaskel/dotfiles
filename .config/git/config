@@ -4,7 +4,6 @@
 [core]
 	autocrlf = false
 	ignorecase = true
-	excludesFile = ~/.gitignore
 [color]
 	ui = auto
 [init]
@@ -17,3 +16,5 @@
 	ff = true
 [include]
 	path = .gitconfig.local
+[url "git@github.com"]
+	pushInsteadOf = "https://github.com"
