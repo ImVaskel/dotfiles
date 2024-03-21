@@ -15,7 +15,7 @@
 [pull]
 	ff = true
 [include]
-	path = .gitconfig.local
+	path = config.local
 [url "git@github.com:"]
 	pushInsteadOf = "https://github.com"
 [url "git@github.com:"]
