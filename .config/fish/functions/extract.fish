@@ -40,5 +40,6 @@ function extract --description "Extracts common archive formats."
             7z e $argv[1]
         case '*'
             echo 'error: unknown file extension'
+            return 1
     end
 end
