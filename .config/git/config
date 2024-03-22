@@ -1,6 +1,7 @@
 [user]
 	name = ImVaskel
 	email = 49348256+ImVaskel@users.noreply.github.com
+	editor = "nvim"
 [core]
 	autocrlf = false
 	ignorecase = true
@@ -12,11 +13,16 @@
 	autocorrect = 20
 [push]
 	default = current
+	autoSetupRemote = true
+	followTags = true
 [pull]
 	ff = true
 [include]
 	path = config.local
 [url "git@github.com:"]
 	pushInsteadOf = "https://github.com"
-[url "git@github.com:"]
 	insteadOf = "gh:"
+[mergetool "code"]
+	cmd = code --wait $MERGED
+[difftool "code"]
+	cmd = code --wait --diff $LOCAL $REMOTE
