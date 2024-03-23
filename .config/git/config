@@ -27,3 +27,5 @@
 	cmd = code --wait $MERGED
 [difftool "code"]
 	cmd = code --wait --diff $LOCAL $REMOTE
+[alias]
+	acp = "! acp() { [ -z $1 ] && exit 1 || git add $@ && git commit && git push; }; acp"
