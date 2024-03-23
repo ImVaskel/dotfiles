@@ -1,0 +1,7 @@
+# vim: set filetype=gitconfig:
+[user]
+    signingkey = ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICHIXpippKSciTxvQA53nx6P5BDiOiL2PT7JKWz6cNBg
+[gpg]
+    format = ssh
+[commit]
+    gpgsign = true
