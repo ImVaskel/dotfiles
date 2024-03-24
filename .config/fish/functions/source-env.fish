@@ -21,10 +21,10 @@ function source-env --description "Sources environment files, with the syntax fo
             # Next, split by the delimiter (=), validating we have 2
             # Get rid of extrenous whitespace like FOO = bar
             # It's kind of rigged but does the following:
-            # first, it replaces the comment with nothing, then it splits it by =, then it iterates over it
+            # first, it gets rid of the comment, then it splits it by =, then it iterates over it
             # then when iterating it checks if the string is not empty AND trims it if so.
             # i am only checking if it is empty because of a bug where ``FOO = BAR`` somehow splits to 4, even with max
-            set split (for i in (string split -m 1 = (string replace -r "#*" "" $line)); if test -n "$i"; echo (string trim $i); end; end)
+            set split (for i in (string replace -r "#.+" "" $line | string split -m 1 = ); test -n "$i"; and string trim $i; end)
             if string match -r '\s+' $split[1]
                 # there is a space in the identifier
                 echo "source-env: ignoring $file:$num as there is a space in the identifier"
