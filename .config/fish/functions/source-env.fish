@@ -18,8 +18,6 @@ function source-env --description "Sources environment files, with the syntax fo
             if string match -q '#*' "$line"
                 continue
             end
-            # Next, split by the delimiter (=), validating we have 2
-            # Get rid of extrenous whitespace like FOO = bar
             # It's kind of rigged but does the following:
             # first, it gets rid of the comment, then it splits it by =, then it iterates over it
             # then when iterating it checks if the string is not empty AND trims it if so.
